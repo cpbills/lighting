@@ -1,0 +1,163 @@
+#!/usr/bin/python
+
+import os
+import sys
+import time
+import getopt
+from phue import Bridge
+
+# TODO: YAML config file, including presets
+rooms = { 'all':      ['island001', 'island002', 'living001', 'bedroom001', 'bedroom002', 'tv001'],
+          'living':   ['island001', 'island002', 'living001', 'tv001'],
+          'kitchen':  ['island001', 'island002'],
+          'bedroom':  ['bedroom001', 'bedroom002'] }
+
+colors =  { 'red':          {'hue': 443, 'sat': 250},
+            'purple':       {'hue': 47373, 'sat': 214},
+            'yellow':       {'hue': 9688, 'sat': 254},
+            'white_blue':   { 'hue':  41491, 'sat': 78 },
+            'white_yellow': { 'hue': 7208, 'sat': 224 },
+            'dark_yellow':  { 'hue': 8825, 'sat': 254 },
+            'dark_red':     { 'hue': 688, 'sat': 252 }
+          }
+
+# day
+# 'hue': 41491, 'sat': 78
+# pre-twilight
+#'hue': 7208, 'sat': 224
+
+bright = {  'max': {'bri': 254},
+            'lit': {'bri': 180},
+            'mid': {'bri': 140},
+            'low': {'bri': 90},
+            'dim': {'bri': 40},
+            'off': {'bri': 1 } }
+
+off = { 'on': False }
+on = { 'on': True }
+
+bridge_ip = '10.10.10.169'
+bridge = Bridge(bridge_ip)
+
+def main():
+  pid = os.fork()
+  if pid == 0:
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'a:r:l:')
+    except getopt.GetoptError as err:
+        print str(err)
+        sys.exit(2)
+
+    action = 'mood'
+    room = 'all'
+
+    for opt, val in opts:
+      if opt == '-a':
+        action = val
+      elif opt == '-r':
+        room = val
+      elif opt == '-l':
+        room = val
+
+    do_lights(action, room)
+
+def set_room(room, cmd, seconds):
+  cmd['transitiontime'] = seconds * 10
+  for light in room:
+    bridge.set_light(light, cmd)
+
+  time.sleep(seconds + 10)
+
+def set_color(color, bri):
+  cmd = bright[bri].copy()
+  cmd.update(colors[color])
+
+  return cmd
+
+def do_lights(action, room):
+  if action == 'sunset':
+    bridge.set_light(rooms[room], on)
+
+    cmd = set_color('white_yellow', 'lit')
+    set_room(rooms[room], cmd, 30)
+
+    cmd = set_color('dark_yellow', 'lit')
+    set_room(rooms[room], cmd, 300)
+
+    cmd = set_color('dark_yellow', 'mid')
+    set_room(rooms[room], cmd, 300)
+
+    cmd = set_color('dark_red', 'mid')
+    set_room(rooms[room], cmd, 300)
+
+    cmd = set_color('dark_red', 'dim')
+    set_room(rooms[room], cmd, 600)
+
+    cmd = set_color('dark_red', 'off')
+    set_room(rooms[room], cmd, 600)
+
+    bridge.set_light(rooms[room], off)
+
+  elif action == 'evening':
+    bridge.set_light(rooms[room], on)
+
+    cmd = set_color('white_blue', 'lit')
+    set_room(rooms[room], cmd, 30)
+
+  elif action == 'late_evening':
+    bridge.set_light(rooms[room], on)
+
+    cmd = set_color('purple', 'lit')
+    set_room(rooms[room], cmd, 30)
+
+
+  elif action == 'quick_sunset':
+    low_yellow = bright['mid'].copy()
+    low_yellow.update(colors['yellow'])
+    set_room(bridge, rooms[room], low_yellow, 5)
+    time.sleep(10)
+    #set_room(bridge, rooms[room], colors['yellow'], 10)
+    dim_red = bright['dim'].copy()
+    dim_red.update(colors['red'])
+    set_room(bridge, rooms[room], dim_red, 60)
+    time.sleep(70)
+    set_room(bridge, rooms[room], bright['off'], 30)
+    time.sleep(40)
+    set_room(bridge, rooms[room], off, 1)
+
+  elif action == 'off':
+    set_room(bridge, rooms[room], off, 1)
+
+  elif action == 'max':
+    set_room(bridge, rooms[room], bright['max'], 3)
+
+#set_room(bridge, living_room, on_mid, 10)
+#time.sleep(10)
+#set_room(bridge, living_room, red, 10)
+
+
+
+# TODO
+# - set / find morning / sunrise colors
+# - set / find sunset colors?
+# - romance / red / purple? purple... don't wanna go to sleep, right?
+# program the routines as functions, then use cron to call the routines
+# make it easy to 'dim the lights' so to speak, movie mode, etc?
+
+#if bridge.get_light('bedroom001', 'on') == True:
+#    # If bedroom001 is on and brighter than mid
+#    if bridge.get_light('bedroom001', 'bri') > 140:
+#        set_room(bridge, bedroom, on_mid, 10)
+#        time.sleep(10)
+
+
+## Press HUE connect button (on bridge) and uncomment next line and run script
+##bridge.connect()
+#
+#for light in living_room:
+#    bridge.set_light(light, red_lights)
+#
+#for light in living_room:
+#    bridge.set_light(light, sunset)
+if __name__ == "__main__":
+  main()
